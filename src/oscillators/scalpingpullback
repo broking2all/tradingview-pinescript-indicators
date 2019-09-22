@@ -1,0 +1,122 @@
+//@version=2
+//
+
+study(title = "Scalping PullBack Tool R1", shorttitle = "SCALPTOOL R1", overlay = true)
+
+//
+// Revision:        1
+// Original Author: JustUncleL
+//
+// Description:
+//    This study project is a Scalping Pullback trading Tool that incorporates the majority of the indicators
+//    needed to analyse and scalp Trends for Pull Backs and reversals on 1min, 5min or 15min charts. 
+//    The set up utilies Heikin Ashi candle charts. Incorporated within this tool are the following indicators:
+//    1. Major industry (Banks) recognised important EMAs in an EMA Ribbon: 
+//       - Green = EMA89
+//       - Blue  = EMA200 
+//       - Black = EMA633
+//    2. The 36EMA (default) High/Low+Close Price Action Channel (PAC).
+//    3. Fractals
+//    4. HH, LH, LL, HL finder to help with drawing Trend lines and mini Trend Lines.
+//    5. Coloured coded Bar high lighting based on the PAC: 
+//       - blue = bar closed  above PAC
+//       - red  = bar closed below PAC
+//       - gray = bar closed inside PAC
+//       - red line = EMA36 of bar close
+//
+// Setup and hints:
+//
+//  - Set the chart to Heikin Ashi Candles.
+//  - I also add "Sweetspot Gold10" indicator to the chart as well to help with support and resistance
+//    finding and shows where the important "00" and "0" lines are.
+//  - When price is above the PAC(blue bars) we are only looking to buy as price comes back to the PAC
+//    When price is below the PAC(red bars), we are only looking to sell when price comes back to the PAC
+//  - What we’re looking for when price comes back into the PAC we draw mini Trendlines uitilising the
+//    Fractals and HH/LL points to guide your TL drawing.
+//  - Now look for the trend to pull back and break the drawn TL. That's is when we place the scalp
+//    trade.
+//  - So we are looking for continuation signals in terms of a strong, momentumdriven pullbacks of the EMA36.
+//  - The other EMAs are there to check for other Pullbacks when EMA36 is broken.
+//  - Other than the SweetSpot Gold10 indicator, you should not need any other indicator to scalp 
+//    for pullbacks.
+//
+// References:
+//  - [RS]Fractals V8 by RicardoSantos
+//  - Price Action Trading System v0.3 by JustUncleL
+//  - SweetSpot Gold10 R1 by JustUncleL
+//  - http://www.swing-trade-stocks.com/pullbacks.html
+//  - https://www.forexstrategiesresources.com/scalping-forex-strategies/106-1-min-scalping-with-34-exponential-moving-average-channel/
+//
+
+// === INPUTS ===
+HiLoLen     = input(36, minval=2,title="High Low channel Length")
+scolor      = input(true, title="Show coloured Bars to indicate Trend")
+ShowEMAribbon = input(true)
+ShowHHLL    = input(true)
+filterBW    = input(false, title="Filter Bill Williams Fractals")
+ShowFractals= input(true)
+ShowBuySell = input(true, title="Show Open Close MA Cross Alert Dots")
+
+// === /INPUTS ===
+
+// === BASE FUNCTIONS ===
+
+//  ||---   Fractal Recognition Functions:  ---------------------------------------------------------------||
+isRegularFractal(mode) =>
+    ret = mode == 1 ? high[4] < high[3] and high[3] < high[2] and high[2] > high[1] and high[1] > high[0] : mode == -1 ? low[4] > low[3] and low[3] > low[2] and low[2] < low[1] and low[1] < low[0] : false
+
+isBWFractal(mode) =>
+    ret = mode == 1 ? high[4] < high[2] and high[3] <= high[2] and high[2] >= high[1] and high[2] > high[0] : mode == -1 ? low[4] > low[2] and low[3] >= low[2] and low[2] <= low[1] and low[2] < low[0] : false
+//  ||-----------------------------------------------------------------------------------------------------||
+
+// === /BASE FUNCTIONS ===
+
+// === SERIES SETUP ===
+EMA89       = ema(close,89)
+EMA200      = ema(close,200)
+EMA633      = ema(close,633)
+pacC        = ema(close,HiLoLen)
+pacL        = ema(low,HiLoLen)
+pacU        = ema(high,HiLoLen)
+// === /SERIES ===
+
+// === PLOTTING ===
+// 
+// Plot the Price Action Channel (PAC) base on EMA high,low and close
+L=plot(pacL, color=gray, linewidth=1, title="High PAC EMA",transp=50)
+U=plot(pacU, color=gray, linewidth=1, title="Low PAC EMA",transp=50)
+C=plot(pacC, color=red, linewidth=2, title="Close PAC EMA",transp=0)
+fill(L,U, color=gray,transp=90,title="Fill HiLo PAC")
+
+// Colour bars according to the close position relative to the PAC selected.
+bColour     = close>=pacU? blue : close<=pacL? red : gray 
+barcolor(scolor?bColour:na, title = "Bar Colours")
+
+// Draw the EMA ribbon
+plot(ShowEMAribbon?EMA89:na, color=green,linewidth=2,transp=20,title="EMA89")
+plot(ShowEMAribbon?EMA200:na, color=blue,linewidth=3,transp=20,title="EMA200")
+plot(ShowEMAribbon?EMA633:na, color=black,linewidth=4,transp=20,title="EMA633")
+
+//  ||---   Fractal Recognition:
+
+//  ||-----------------------------------------------------------------------------------------------------||
+filteredtopf = filterBW ? isRegularFractal(1) : isBWFractal(1)
+filteredbotf = filterBW ? isRegularFractal(-1) : isBWFractal(-1)
+
+plotshape(ShowFractals? filteredtopf :na, title='Filtered Top Fractals', style=shape.triangledown, location=location.abovebar, color=red, offset=-2)
+plotshape(ShowFractals? filteredbotf :na, title='Filtered Bottom Fractals', style=shape.triangleup, location=location.belowbar, color=lime, offset=-2)
+
+//  ||-----------------------------------------------------------------------------------------------------||
+//  ||---   Higher Highs, Lower Highs, Higher Lows, Lower Lows  -------------------------------------------||
+higherhigh = filteredtopf == false ? false : ( valuewhen(filteredtopf == true, high[2], 1) < valuewhen(filteredtopf == true, high[2], 0) and valuewhen(filteredtopf == true, high[2], 2) < valuewhen(filteredtopf == true, high[2], 0))
+lowerhigh = filteredtopf == false ? false : ( valuewhen(filteredtopf == true, high[2], 1) > valuewhen(filteredtopf == true, high[2], 0) and valuewhen(filteredtopf == true, high[2], 2) > valuewhen(filteredtopf == true, high[2], 0))
+higherlow = filteredbotf == false ? false : ( valuewhen(filteredbotf == true, low[2], 1) < valuewhen(filteredbotf == true, low[2], 0) and valuewhen(filteredbotf == true, low[2], 2) < valuewhen(filteredbotf == true, low[2], 0))
+lowerlow = filteredbotf == false ? false : ( valuewhen(filteredbotf == true, low[2], 1) > valuewhen(filteredbotf == true, low[2], 0) and valuewhen(filteredbotf == true, low[2], 2) > valuewhen(filteredbotf == true, low[2], 0))
+
+plotshape(ShowHHLL ? higherhigh : na, title='Higher High', style=shape.square, location=location.abovebar, color=maroon, text="[HH]", offset=-2)
+plotshape(ShowHHLL ? lowerhigh : na, title='Lower High', style=shape.square, location=location.abovebar, color=maroon, text="[LH]", offset=-2)
+plotshape(ShowHHLL ? higherlow : na, title='High Low', style=shape.square, location=location.belowbar, color=green, text="[HL]", offset=-2)
+plotshape(ShowHHLL ? lowerlow : na, title='Lower Low', style=shape.square, location=location.belowbar, color=green, text="[LL]", offset=-2)
+// === /PLOTTING ===
+
+// === eof
